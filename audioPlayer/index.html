@@ -1,0 +1,142 @@
+<html>
+<head>
+<script type="text/javascript" src="/js/jquery331.js"></script>
+<script type="text/javascript" src="js/homeFunctions.js"></script>
+
+<style type="text/css">
+    body { font-size: 14px; background-color: black; color: white; }
+	span { display: block; height: 10px; float: left; height: 10px; box-shadow: 1px 1px 4px black; }
+	audio { opacity: 0.8; }
+
+    #container { width: 1900px; }
+	#audioContainer { display: none; float: left; text-align: center; }
+	#folderContainer { width: 800px; }
+	#folderContainer, #fileContainer { float: left; }
+	#folders, #files { float: left; margin: 20px 20px; }
+	
+	.folder, .file { text-shadow: 1px 1px 1px black; text-transform: uppercase; }
+	.folder { font-weight: bold; color: #ffffa4; background-color: #3a3930; padding: 3px 10px; margin: 3px 3px; }
+	.file { font-size: 14px; color: yellow; }
+	.white { color: white; }
+	.orange { color: orange; }
+	.playing { color: #A3A3FF; }
+</style>
+</head>
+
+<body onbeforeunload="saveFileAndPos()">
+	<div id="container">
+		<div id="folderContainer">
+			<div id="folders"></div>
+		</div>
+		<div id="fileContainer">
+			<div id="files"></div>
+		</div>
+		<div id="audioContainer">
+			<div id="audiobookCoverContainer"></div>
+			<audio id="audioPlayer" preload="auto" controls src="" type="" ></audio> 
+			<div id="loading"></div>
+		</div>
+	</div>
+	<div id="vars" data-foldername="" data-currentlyplaying="" data-playlist="" data-playing="no" data-autoplay="yes" data-backgroundcolours="cadetblue,darkslategray,firebrick,lightblue,maroon,orange,peru,steelblue,teal" ></div>
+</body>
+
+<script type="text/javascript">
+	$(document).ready(function(){
+		$.get( "source/getFolderList.php", function( response ) {
+			$("#folders").html(response);
+		})
+		
+		$("#folders").on( "click", ".folder", function() {
+			// Is the audio player currently playing?
+			var audioPlayer = document.getElementById('audioPlayer');
+			if (audioPlayer.paused === false) {
+				saveFileAndPos();
+			}
+			
+			folderName = $(this).data("foldername");
+			$("#vars").data("foldername", folderName);
+			folderNameHTML = '<div class="folder">' + folderName + '</div>';
+			$.get( "source/getFileList.php?folder=" + folderName, function ( response ) {
+				$("#files").html(folderNameHTML + response);
+				if ($("#vars").data("autoplay") == "yes") {
+					$(".playing").click();
+				}
+			})
+			// ask for cover images
+			$.get( "source/checkForAudioBookCover.php?foldername=" + folderName, function ( response ) {
+				if (response != "") {
+					$("#audiobookCoverContainer").html(response);
+				}
+			});
+			// set background-color for audioContainer
+			colours = $("#vars").data("backgroundcolours").split(",");
+			colourSize = colours.length;
+			randomColour = Math.floor(Math.random() * colourSize);
+			$("#audioContainer").css("background-color","").css("background-color", colours[randomColour]);
+		})
+		
+		$("#files").on( "click", ".file", function() {
+			folderName = $("#vars").data("foldername");
+			fileName = $(this).html(); $("#vars").data("currentlyplaying", fileName);
+			fullFileName = folderName + "/" + fileName;
+			if ($(this).data("currentposition")) {
+				jumpTo = $(this).data("currentposition")
+			} else {
+				jumpTo = 0;
+			}
+			
+			$("#audioContainer").fadeIn();
+			// start playing the audio clip
+			playAudioFile(fullFileName, jumpTo);
+			
+			found = false;
+			$(".file").each( function() {
+				if ($(this).hasClass("playing") && found==false) {
+					$(this).removeClass("playing").next();
+				}
+				if ($(this).hasClass("white") && found==false) {
+					$(this).removeClass("white").next();
+				}
+			});
+			
+			$(this).addClass("playing");
+			$(this).nextAll().addClass("white");
+			fileNameList = "";
+			$(".white").each( function() { 
+				fileNameList = fileNameList + '   ' + $(this).html();
+			});
+			$("#vars").data("playlist", fileNameList.trim());
+		})
+		
+		$("audio").on( "play", function() {
+			console.log("onplay is attempting to start a timer");
+			startTimer(); // This is only currently required for the audio controls that are built into the browser
+			// eventually Ill add a GUI for playing, pausing etc
+		})
+		
+		$("audio").on( "pause", function() {
+			saveFileAndPos();
+		})
+		
+		$("audio").on( "ended", function() {
+			console.log("File Ended");
+			// GET NEXT FILE TO PLAY
+			playlist       = $("#vars").data("playlist");
+			playListArray  = playlist.split("   ");
+			if (playListArray.length>0) {
+				folderName = $("#vars").data("foldername");
+				nextFile = playListArray.shift();
+				nextFileToPlay = folderName + "/" + nextFile;
+				
+				$("#vars").data("currentlyplaying", nextFile);
+				$("#vars").data("playlist", playListArray.join("   "));
+				
+				playAudioFile(nextFileToPlay);
+				console.log("Next File Loaded");
+			} else {
+				console.log("No More Files Found");
+			}
+		})
+	})
+</script>
+</html>
